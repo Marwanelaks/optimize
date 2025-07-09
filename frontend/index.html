@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OptimizeAI - AI-Powered Website Optimization</title>
+    <meta name="description" content="Transform your website performance with AI-powered optimization tools. Analyze, optimize, and deploy faster websites in minutes." />
+    <meta name="keywords" content="website optimization, AI tools, performance, web development, code analysis" />
+    <meta name="author" content="OptimizeAI" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://optimizeai.com/" />
+    <meta property="og:title" content="OptimizeAI - AI-Powered Website Optimization" />
+    <meta property="og:description" content="Transform your website performance with AI-powered optimization tools." />
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://optimizeai.com/" />
+    <meta property="twitter:title" content="OptimizeAI - AI-Powered Website Optimization" />
+    <meta property="twitter:description" content="Transform your website performance with AI-powered optimization tools." />
+    
+    <!-- Preload critical fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      }
+      
+      /* Loading spinner */
+      .loading-spinner {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        border: 3px solid #f3f4f6;
+        border-top: 3px solid #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 20px auto;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      /* Hide loading spinner when React loads */
+      #root:not(:empty) ~ .loading-spinner {
+        display: none;
+      }
+    </style>
+  </head>
+  <body class="bg-white dark:bg-gray-900 transition-colors duration-300">
+    <div id="root"></div>
+    <div class="loading-spinner"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
