@@ -73,8 +73,8 @@ class FileConversionRequest(BaseModel):
 class AIOptimizer:
     def __init__(self):
         self.client = OpenAI(
-            api_key=os.getenv("OPENROUTER_API_KEY"),
-            base_url="https://openrouter.ai/api/v1"
+            api_key="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",
+            base_url="https://openrouter.ai/api/v1/"
         )
     
     def optimize_code(self, code: str, file_type: str) -> str:
@@ -97,7 +97,7 @@ class AIOptimizer:
         
         try:
             response = self.client.chat.completions.create(
-                model="google/gemini-2.0-flash-001",
+                model="deepseek/deepseek-chat-v3-0324:free",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
                 response_format={"type": "json_object"}
@@ -112,22 +112,26 @@ class AIOptimizer:
         prompt = f"""
         Analyze this {file_type} code and provide:
         1. Performance score (0-100)
-        2. SEO score (0-100)
+        2. SEO score (0-100) if HTML
         3. Accessibility score (0-100)
         4. 3 specific optimization suggestions
         5. Estimated optimization potential (0-100%)
+        6. Code complexity analysis
+        7. Best practice compliance
         
         Return as JSON with these keys:
         - performance_score
-        - seo_score
+        - seo_score (if applicable)
         - accessibility_score
         - suggestions
         - optimization_potential
+        - complexity_analysis
+        - best_practice_compliance
         """
         
         try:
             response = self.client.chat.completions.create(
-                model="google/gemini-2.0-flash-001",
+                model="deepseek/deepseek-chat-v3-0324:free",
                 messages=[{"role": "user", "content": f"{prompt}\n\n{code}"}],
                 temperature=0.2,
                 response_format={"type": "json_object"}
@@ -140,33 +144,35 @@ class AIOptimizer:
                 "seo_score": 50,
                 "accessibility_score": 50,
                 "suggestions": ["Analysis failed"],
-                "optimization_potential": 0
+                "optimization_potential": 0,
+                "complexity_analysis": "Unknown",
+                "best_practice_compliance": "Unknown"
             }
 
+    def convert_code(self, code: str, source_format: str, target_format: str) -> str:
+        """Convert code between formats using AI"""
+        prompt = f"""
+        Convert the following {source_format} code to {target_format}.
+        Maintain all functionality while following {target_format} best practices.
+        Include all necessary imports/dependencies.
+        Return ONLY the converted code, no explanations.
+        
+        {source_format} code:
+        {code}
+        """
+        
+        try:
+            response = self.client.chat.completions.create(
+                model="deepseek/deepseek-chat-v3-0324:free",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error(f"AI conversion failed: {str(e)}")
+            return code
+
 ai_optimizer = AIOptimizer()
-
-def optimize_image(image_path: str, aggressive: bool = False) -> str:
-    """Optimize image and convert to WebP format"""
-    try:
-        with Image.open(image_path) as img:
-            # Convert to WebP
-            webp_path = f"{os.path.splitext(image_path)[0]}.webp"
-            quality = 75 if aggressive else 85
-            
-            # Preserve transparency for PNGs
-            if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                img.save(webp_path, 'WEBP', quality=quality, lossless=False, method=6)
-            else:
-                img.save(webp_path, 'WEBP', quality=quality, method=6)
-            
-            # Remove original image
-            os.remove(image_path)
-            return webp_path
-    except Exception as e:
-        logger.error(f"Error optimizing image {image_path}: {str(e)}")
-        return image_path
-
-# Add these functions ABOVE the process_upload() function in your code:
 
 def get_file_hash(file_path: str) -> str:
     """Generate hash of file contents"""
@@ -225,22 +231,65 @@ def analyze_file(file_path: str) -> Dict[str, Any]:
         }
 
 def optimize_image(image_path: str, aggressive: bool = False) -> str:
-    """Optimize image and convert to WebP format"""
+    """Optimize image and convert to WebP format using AI suggestions"""
     try:
         with Image.open(image_path) as img:
-            # Convert to WebP
-            webp_path = f"{os.path.splitext(image_path)[0]}.webp"
-            quality = 75 if aggressive else 85
+            # Get AI suggestions for image optimization
+            analysis_prompt = f"""
+            Analyze this image and suggest optimization parameters:
+            - Format (WebP/AVIF/JPEG/PNG)
+            - Quality level (1-100)
+            - Compression method
+            - Should we preserve transparency?
+            - Recommended dimensions
             
-            # Preserve transparency for PNGs
-            if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                img.save(webp_path, 'WEBP', quality=quality, lossless=False, method=6)
-            else:
-                img.save(webp_path, 'WEBP', quality=quality, method=6)
+            Current format: {img.format}
+            Dimensions: {img.size}
+            Mode: {img.mode}
+            """
             
-            # Remove original image
-            os.remove(image_path)
-            return webp_path
+            try:
+                response = ai_optimizer.optimize_code(analysis_prompt, "image_analysis")
+                suggestions = json.loads(response)
+                
+                # Apply AI suggestions
+                format = suggestions.get('format', 'WEBP').upper()
+                quality = suggestions.get('quality', 85 if aggressive else 90)
+                method = suggestions.get('method', 6)
+                preserve_transparency = suggestions.get('preserve_transparency', 
+                                                     img.mode in ('RGBA', 'LA') or 
+                                                     (img.mode == 'P' and 'transparency' in img.info))
+                
+                # Convert to recommended format
+                new_path = f"{os.path.splitext(image_path)[0]}.{format.lower()}"
+                
+                if format == 'WEBP':
+                    img.save(new_path, 'WEBP', quality=quality, lossless=False, method=method)
+                elif format == 'JPEG':
+                    if img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    img.save(new_path, 'JPEG', quality=quality, optimize=True)
+                elif format == 'PNG':
+                    img.save(new_path, 'PNG', optimize=True)
+                
+                # Remove original image
+                os.remove(image_path)
+                return new_path
+                
+            except Exception as ai_error:
+                logger.warning(f"AI image optimization failed, using default: {str(ai_error)}")
+                # Fallback to default WebP conversion
+                webp_path = f"{os.path.splitext(image_path)[0]}.webp"
+                quality = 75 if aggressive else 85
+                
+                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                    img.save(webp_path, 'WEBP', quality=quality, lossless=False, method=6)
+                else:
+                    img.save(webp_path, 'WEBP', quality=quality, method=6)
+                
+                os.remove(image_path)
+                return webp_path
+                
     except Exception as e:
         logger.error(f"Error optimizing image {image_path}: {str(e)}")
         return image_path
@@ -324,7 +373,7 @@ def optimize_external_resources(content: str) -> str:
     return content
 
 def analyze_seo(directory: str) -> Dict[str, Any]:
-    """Analyze and improve SEO for all HTML files"""
+    """Analyze and improve SEO for all HTML files using AI"""
     report = {}
     for root, _, files in os.walk(directory):
         for filename in files:
@@ -338,23 +387,11 @@ def analyze_seo(directory: str) -> Dict[str, Any]:
                     analysis = ai_optimizer.analyze_code(content, "HTML")
                     report[file_path] = analysis
                     
-                    # Apply basic SEO improvements
-                    soup = BeautifulSoup(content, 'html.parser')
-                    head = soup.find('head')
-                    if head:
-                        if not soup.find('meta', attrs={'name': 'description'}):
-                            meta = soup.new_tag('meta', attrs={
-                                'name': 'description',
-                                'content': 'Optimized website with AI assistance'
-                            })
-                            head.append(meta)
-                        
-                        if not soup.find('meta', attrs={'charset': True}):
-                            meta = soup.new_tag('meta', attrs={'charset': 'UTF-8'})
-                            head.insert(0, meta)
-                    
+                    # Apply AI-generated SEO improvements
+                    optimized_content = ai_optimizer.optimize_code(content, "HTML")
                     with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write(str(soup))
+                        f.write(optimized_content)
+                        
                 except Exception as e:
                     logger.error(f"Failed to analyze SEO for {file_path}: {str(e)}")
     return report
@@ -493,16 +530,13 @@ async def optimize_upload(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# Add these endpoints to your existing FastAPI app
-
 @app.post("/ai/analyze")
 async def ai_analyze(
     request: Request,
     file: UploadFile = File(None)
 ):
     """
-    Analyze code for performance, SEO, and accessibility
+    Analyze code for performance, SEO, and accessibility using AI
     Accepts either:
     1. JSON payload with 'code' field (application/json)
     2. File upload (multipart/form-data)
@@ -520,7 +554,7 @@ async def ai_analyze(
                     raise HTTPException(status_code=400, detail="JSON payload must contain 'code' field")
                 
                 code = payload['code']
-                file_type = 'html'  # Default for JSON payloads
+                file_type = payload.get('file_type', 'html')  # Default to html for JSON payloads
                 
                 logger.info(f"Analyzing code (length: {len(code)} chars)")
                 analysis = ai_optimizer.analyze_code(code, file_type)
@@ -558,24 +592,21 @@ async def ai_analyze(
 async def ai_convert(
     request: Request,
     file: UploadFile = File(None),
-    target_format: str = Query(..., description="Target format (e.g., 'scss_to_css')")
+    target_format: str = Query(..., description="Target format (e.g., 'js_to_ts', 'scss_to_css')")
 ):
-    """Convert between different code formats"""
+    """Convert between different code formats using AI"""
     try:
         content_type = request.headers.get('content-type', '')
         code = None
-        file_type = None
+        source_format = None
 
         # Handle JSON payload
         if 'application/json' in content_type:
             try:
                 payload = await request.json()
-                logger.info(f"JSON payload received for conversion")
+                logger.info("JSON payload received for conversion")
                 
                 # Accept either 'content' or 'code' field
-                if not payload:
-                    raise HTTPException(status_code=400, detail="Empty JSON payload")
-                
                 code = payload.get('content') or payload.get('code')
                 if not code:
                     raise HTTPException(
@@ -583,7 +614,8 @@ async def ai_convert(
                         detail="JSON payload must contain either 'content' or 'code' field"
                     )
                 
-                logger.info(f"Converting code (length: {len(code)} chars)")
+                source_format = payload.get('source_format', 'js')  # Default source format
+                logger.info(f"Converting code from {source_format} to {target_format}")
                 
             except json.JSONDecodeError:
                 raise HTTPException(status_code=400, detail="Invalid JSON payload")
@@ -592,12 +624,12 @@ async def ai_convert(
         elif file and 'multipart/form-data' in content_type:
             logger.info(f"Processing file upload: {file.filename}")
             content = await file.read()
-            if len(content) > 1024 * 1024:  # 1MB limit
+            if len(content) > 1024 * 1024:  # 1MB limit:
                 raise HTTPException(status_code=400, detail="File too large")
                 
             code = content.decode('utf-8')
-            file_type = Path(file.filename).suffix[1:].lower()
-            logger.info(f"Converting {file_type} file (size: {len(content)} bytes)")
+            source_format = Path(file.filename).suffix[1:].lower()
+            logger.info(f"Converting {source_format} to {target_format}")
         
         if not code:
             raise HTTPException(
@@ -605,21 +637,16 @@ async def ai_convert(
                 detail="Invalid request - send either JSON with 'content'/'code' field or file upload"
             )
 
-        # Rest of your conversion logic remains the same
-        if target_format == "scss_to_css":
-            converted = sass.compile(string=code)
-        elif target_format == "css_to_scss":
-            converted = convert_css_to_scss(code)
-        elif target_format == "js_to_ts":
-            converted = ai_optimizer.optimize_code(
-                f"Convert this JavaScript code to TypeScript:\n\n{code}",
-                "TypeScript conversion"
-            )
-        elif target_format == "html_to_jsx":
-            converted = convert_html_to_jsx(code)
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported conversion type")
+        # Special case for SCSS to CSS (use libsass if available)
+        if target_format == "scss_to_css" and source_format in ('scss', 'sass'):
+            try:
+                converted = sass.compile(string=code)
+                return {"converted": converted}
+            except Exception:
+                logger.warning("Libsass failed, falling back to AI conversion")
 
+        # Use AI for all conversions
+        converted = ai_optimizer.convert_code(code, source_format, target_format.replace('_to_', ' '))
         return {"converted": converted}
         
     except HTTPException:
@@ -627,8 +654,7 @@ async def ai_convert(
     except Exception as e:
         logger.error(f"Conversion failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
-
+    
 
 @app.post("/ai/suggest", response_model=Dict[str, str])
 async def ai_suggest(request: AIAnalysisRequest):
@@ -637,14 +663,42 @@ async def ai_suggest(request: AIAnalysisRequest):
         if not request.prompt:
             raise HTTPException(status_code=400, detail="Prompt is required")
 
-        response = ai_optimizer.optimize_code(request.prompt, "suggestion")
+        # Get AI suggestions
+        prompt = f"""
+        Provide detailed optimization suggestions for:
+        {request.prompt}
         
-        # Format the response as markdown with bullet points
-        formatted_response = format_as_markdown(response)
+        Include:
+        1. Specific actionable recommendations
+        2. Performance impact estimates
+        3. Implementation difficulty
+        4. Expected benefits
+        5. Code examples where applicable
+        
+        Format as markdown with sections.
+        """
+        
+        response = ai_optimizer.optimize_code(prompt, "suggestions")
+        
+        # Generate follow-up questions
+        follow_up_prompt = f"""
+        Based on this topic: {request.prompt}
+        Generate 3 relevant follow-up questions that would help the user
+        further optimize their code or website.
+        Return as a JSON list.
+        """
+        
+        follow_up_response = ai_optimizer.optimize_code(follow_up_prompt, "questions")
+        try:
+            follow_up_questions = json.loads(follow_up_response)
+        except:
+            follow_up_questions = ["How can I further improve performance?", 
+                                 "What accessibility considerations should I make?", 
+                                 "Are there any SEO best practices I'm missing?"]
         
         return {
-            "response": formatted_response,
-            "follow_up_questions": generate_follow_up_questions(request.prompt)
+            "suggestions": response,
+            "follow_up_questions": follow_up_questions
         }
         
     except Exception as e:
@@ -656,7 +710,7 @@ async def seo_analyze(
     url: str = Query(None, description="Website URL"),
     html_content: str = Query(None, description="Direct HTML content")
 ):
-    """Analyze SEO for a website or HTML content"""
+    """Analyze SEO for a website or HTML content using AI"""
     try:
         if url:
             # Fetch website content
@@ -667,140 +721,159 @@ async def seo_analyze(
         else:
             raise HTTPException(status_code=400, detail="URL or HTML content required")
 
-        # Basic SEO analysis
-        soup = BeautifulSoup(content, 'html.parser')
+        # Get comprehensive AI SEO analysis
+        seo_prompt = f"""
+        Analyze this HTML content for SEO and provide:
+        1. Overall SEO score (0-100)
+        2. Technical SEO analysis
+        3. Content quality assessment
+        4. Backlink profile suggestions
+        5. Mobile friendliness
+        6. Page speed insights
+        7. Structured data recommendations
+        8. Competitor comparison if possible
+        9. Actionable improvement plan
         
-        # Get AI analysis
-        analysis = ai_optimizer.analyze_code(content, "HTML")
+        Return as JSON with detailed analysis.
         
-        # Additional SEO checks
-        seo_report = {
+        HTML content:
+        {content[:10000]}  # Limit to first 10k chars for analysis
+        """
+        
+        analysis = ai_optimizer.analyze_code(seo_prompt, "SEO")
+        
+        return {
             "analysis": analysis,
-            "checks": {
-                "title": check_seo_title(soup),
-                "meta_description": check_meta_description(soup),
-                "headings": check_headings_structure(soup),
-                "images": check_image_alt_tags(soup),
-                "links": check_internal_links(soup),
-                "mobile_friendly": check_mobile_friendliness(content)
-            }
+            "optimized_html": ai_optimizer.optimize_code(content, "HTML") if len(content) < 5000 else "Content too large for optimization"
         }
-        
-        return seo_report
         
     except Exception as e:
         logger.error(f"SEO analysis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Helper functions for the APIs
+@app.post("/ai/complexity", response_model=Dict[str, Any])
+async def code_complexity(
+    request: AIAnalysisRequest
+):
+    """Analyze code complexity using AI"""
+    try:
+        if not request.code:
+            raise HTTPException(status_code=400, detail="Code is required")
+        
+        prompt = f"""
+        Analyze this {request.file_type or 'code'} for complexity and provide:
+        1. Cyclomatic complexity score
+        2. Cognitive complexity score
+        3. Maintainability index
+        4. Potential refactoring opportunities
+        5. Code smell detection
+        6. Performance bottlenecks
+        
+        Return as JSON with detailed metrics.
+        
+        Code:
+        {request.code}
+        """
+        
+        analysis = ai_optimizer.analyze_code(prompt, "complexity")
+        return {"complexity_analysis": analysis}
+        
+    except Exception as e:
+        logger.error(f"Complexity analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-def calculate_code_complexity(code: str, file_type: str) -> Dict[str, Any]:
-    """Calculate code complexity metrics"""
-    # Implement complexity analysis based on file type
-    return {
-        "cyclomatic_complexity": estimate_cyclomatic_complexity(code, file_type),
-        "maintainability_index": calculate_maintainability_index(code, file_type)
-    }
+@app.post("/ai/accessibility", response_model=Dict[str, Any])
+async def accessibility_check(
+    request: AIAnalysisRequest
+):
+    """Check code for accessibility issues using AI"""
+    try:
+        if not request.code and not request.prompt:
+            raise HTTPException(status_code=400, detail="Code or prompt is required")
+        
+        content = request.code if request.code else request.prompt
+        file_type = request.file_type if request.file_type else ("html" if not request.code else "code")
+        
+        prompt = f"""
+        Analyze this {file_type} content for accessibility issues and provide:
+        1. WCAG compliance level (A/AA/AAA)
+        2. Specific accessibility violations
+        3. Screen reader compatibility
+        4. Color contrast issues
+        5. Keyboard navigation problems
+        6. ARIA implementation suggestions
+        7. Mobile accessibility
+        
+        Return as JSON with detailed findings.
+        
+        Content:
+        {content}
+        """
+        
+        analysis = ai_optimizer.analyze_code(prompt, "accessibility")
+        return {"accessibility_analysis": analysis}
+        
+    except Exception as e:
+        logger.error(f"Accessibility check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-def suggest_performance_improvements(code: str, file_type: str) -> List[str]:
-    """Generate performance improvement suggestions"""
-    prompt = f"Suggest 3 specific performance improvements for this {file_type} code:\n\n{code}"
-    response = ai_optimizer.optimize_code(prompt, "suggestions")
-    return [s.strip() for s in response.split('\n') if s.strip()]
+@app.post("/ai/react-convert", response_model=Dict[str, str])
+async def react_conversion(
+    request: AIAnalysisRequest
+):
+    """Convert code to React components using AI"""
+    try:
+        if not request.code:
+            raise HTTPException(status_code=400, detail="Code is required")
+        
+        prompt = f"""
+        Convert this {request.file_type or 'code'} to a modern React component with:
+        1. Functional component style
+        2. TypeScript typing
+        3. React hooks
+        4. Proper prop handling
+        5. Clean, modular code
+        6. Comments for key parts
+        
+        Return ONLY the converted code, no explanations.
+        
+        Original code:
+        {request.code}
+        """
+        
+        converted = ai_optimizer.optimize_code(prompt, "react")
+        return {"converted": converted}
+        
+    except Exception as e:
+        logger.error(f"React conversion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-def suggest_seo_improvements(code: str, file_type: str) -> List[str]:
-    """Generate SEO improvement suggestions for HTML"""
-    if file_type not in ('html', 'htm'):
-        return ["SEO suggestions only available for HTML content"]
-    
-    prompt = f"Suggest 3 specific SEO improvements for this HTML:\n\n{code}"
-    response = ai_optimizer.optimize_code(prompt, "suggestions")
-    return [s.strip() for s in response.split('\n') if s.strip()]
-
-def suggest_accessibility_improvements(code: str, file_type: str) -> List[str]:
-    """Generate accessibility improvement suggestions"""
-    prompt = f"Suggest 3 specific accessibility improvements for this {file_type} code:\n\n{code}"
-    response = ai_optimizer.optimize_code(prompt, "suggestions")
-    return [s.strip() for s in response.split('\n') if s.strip()]
-
-def convert_css_to_scss(css: str) -> str:
-    """Convert CSS to SCSS format"""
-    # Basic conversion - AI could do better
-    return css.replace('}', '}\n\n')
-
-def convert_html_to_jsx(html: str) -> str:
-    """Convert HTML to JSX format"""
-    prompt = f"Convert this HTML to JSX:\n\n{html}"
-    return ai_optimizer.optimize_code(prompt, "JSX conversion")
-
-def format_as_markdown(text: str) -> str:
-    """Format plain text as markdown with bullet points"""
-    lines = [f"- {line.strip()}" for line in text.split('\n') if line.strip()]
-    return '\n'.join(lines)
-
-def generate_follow_up_questions(prompt: str) -> List[str]:
-    """Generate relevant follow-up questions"""
-    prompt = f"Generate 3 relevant follow-up questions about: {prompt}"
-    response = ai_optimizer.optimize_code(prompt, "questions")
-    return [q.strip() for q in response.split('\n') if q.strip()]
-
-# SEO Check helper functions
-
-def check_seo_title(soup: BeautifulSoup) -> Dict[str, Any]:
-    """Check SEO title tag"""
-    title = soup.find('title')
-    return {
-        "exists": title is not None,
-        "value": title.string if title else None,
-        "length": len(title.string) if title else 0,
-        "optimal_length": "50-60 characters"
-    }
-
-def check_meta_description(soup: BeautifulSoup) -> Dict[str, Any]:
-    """Check meta description"""
-    meta = soup.find('meta', attrs={'name': 'description'})
-    return {
-        "exists": meta is not None,
-        "value": meta['content'] if meta else None,
-        "length": len(meta['content']) if meta else 0,
-        "optimal_length": "150-160 characters"
-    }
-
-def check_headings_structure(soup: BeautifulSoup) -> Dict[str, Any]:
-    """Check heading hierarchy"""
-    headings = {f'h{i}': len(soup.find_all(f'h{i}')) for i in range(1, 7)}
-    return {
-        "count": headings,
-        "recommendation": "Should have proper hierarchy (one h1, then h2, etc.)"
-    }
-
-def check_image_alt_tags(soup: BeautifulSoup) -> Dict[str, Any]:
-    """Check image alt attributes"""
-    images = soup.find_all('img')
-    missing_alt = sum(1 for img in images if not img.get('alt'))
-    return {
-        "total_images": len(images),
-        "missing_alt": missing_alt,
-        "percentage_with_alt": f"{((len(images)-missing_alt)/len(images)*100):.1f}%" if images else "N/A"
-    }
-
-def check_internal_links(soup: BeautifulSoup) -> Dict[str, Any]:
-    """Check internal linking structure"""
-    links = soup.find_all('a')
-    return {
-        "total_links": len(links),
-        "internal_links": sum(1 for link in links if link.get('href', '').startswith('/')),
-        "external_links": sum(1 for link in links if link.get('href', '').startswith('http'))
-    }
-
-def check_mobile_friendliness(html: str) -> Dict[str, Any]:
-    """Basic mobile friendliness check"""
-    viewport = 'viewport' in html.lower()
-    return {
-        "viewport_meta": viewport,
-        "recommendation": "Include <meta name='viewport'> tag for mobile"
-    }
-
+def download_github_repo(repo_url: str, dest_dir: str) -> str:
+    """Download GitHub repository as zip"""
+    try:
+        # Extract owner/repo from URL
+        match = re.match(r'https://github\.com/([^/]+)/([^/]+)', repo_url)
+        if not match:
+            raise ValueError("Invalid GitHub URL format")
+        
+        owner, repo = match.groups()
+        if repo.endswith('.git'):
+            repo = repo[:-4]
+        
+        # Download zip
+        zip_url = f"https://github.com/{owner}/{repo}/archive/refs/heads/main.zip"
+        response = requests.get(zip_url)
+        response.raise_for_status()
+        
+        # Save zip file
+        zip_path = os.path.join(dest_dir, f"{repo}.zip")
+        with open(zip_path, 'wb') as f:
+            f.write(response.content)
+        
+        return zip_path
+    except Exception as e:
+        logger.error(f"GitHub download failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"GitHub download failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

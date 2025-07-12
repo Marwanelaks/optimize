@@ -12,3 +12,17 @@ libsass==0.22.0
 pydantic==2.5.3
 python-dotenv==1.0.0
 python-magic==0.4.27
+# Additional dependencies needed:
+aiofiles==23.2.1  # For async file handling
+python-dateutil==2.8.2  # For datetime handling
+concurrent-log-handler==0.9.24  # Better logging
+loguru==0.7.2  # Enhanced logging
+typing-extensions==4.9.0  # For better type hints
+orjson==3.9.10  # Faster JSON processing
+tqdm==4.66.1  # Progress bars for long operations
+filetype==1.2.0  # Better file type detection
+# For development
+pytest==7.4.3
+httpx==0.25.2  # For async HTTP testing
+pytest-asyncio==0.23.5  # Async test support
+mypy==1.7.1  # Type checking

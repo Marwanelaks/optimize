@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Code, 
-  RefreshCw, 
-  Search, 
-  FileText, 
-  Zap, 
+import {
+  Code,
+  RefreshCw,
+  Search,
+  FileText,
+  Zap,
   Download,
   Eye,
   Settings
@@ -36,6 +36,7 @@ ChartJS.register(
 export const AITools: React.FC = () => {
   const [activeTab, setActiveTab] = useState('analyze');
   const [code, setCode] = useState('');
+  const [url, setUrl] = useState('');
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -67,27 +68,35 @@ export const AITools: React.FC = () => {
   ];
 
   const handleAnalyze = async () => {
+    if (!code.trim()) return;
+
     setIsProcessing(true);
     try {
-      // Simulate API call with mock data
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const mockResponse = {
-        performance_score: 85,
-        seo_score: 60,
-        accessibility_score: 75,
-        suggestions: [
-          "Optimize images: Compress the arrow.svg image to reduce its file size without significantly impacting visual quality.",
-          "Add meta description: Include a meta description tag in the <head> section to provide a concise summary of the page's content for search engines.",
-          "Minify HTML: Minify the HTML code to reduce its size by removing unnecessary characters (whitespace, comments)."
-        ],
-        optimization_potential: 25
-      };
+      const response = await fetch('http://localhost:8000/ai/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          file_type: 'html', // or 'css', 'js' etc.
+        }),
+      });
 
-      setAnalysisResult(mockResponse);
-      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Something went wrong');
+      }
+
+      const data = await response.json();
+
+      const analysis = data.analysis;
+      setAnalysisResult(analysis);
+
     } catch (error) {
-      setAnalysisResult({ error: error instanceof Error ? error.message : 'Analysis failed' });
+      setAnalysisResult({
+        error: error instanceof Error ? error.message : 'Analysis failed',
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -95,7 +104,7 @@ export const AITools: React.FC = () => {
 
   const handleConvert = async (targetFormat: string) => {
     if (!code.trim()) return;
-    
+
     setIsProcessing(true);
     try {
       const response = await fetch(`http://localhost:8000/ai/convert?target_format=${targetFormat}`, {
@@ -112,6 +121,29 @@ export const AITools: React.FC = () => {
       }
     } catch (error) {
       console.error('Conversion error:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleAnalyzeSEO = async (url: string) => {
+    setIsProcessing(true);
+    try {
+      const response = await fetch(`http://localhost:8000/ai/seo-analyze?url=${encodeURIComponent(url)}`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'SEO analysis failed');
+      }
+
+      const result = await response.json();
+      console.log('SEO Analysis:', result);
+      setAnalysisResult(result); // Store result in your component state
+
+    } catch (error) {
+      setAnalysisResult({ error: error instanceof Error ? error.message : 'SEO analysis failed' });
     } finally {
       setIsProcessing(false);
     }
@@ -141,7 +173,7 @@ export const AITools: React.FC = () => {
 
   const getChartData = () => {
     if (!analysisResult) return null;
-    
+
     return {
       labels: ['Performance', 'SEO', 'Accessibility'],
       datasets: [
@@ -170,7 +202,7 @@ export const AITools: React.FC = () => {
 
   const getPieData = () => {
     if (!analysisResult) return null;
-    
+
     return {
       labels: ['Optimized', 'Potential'],
       datasets: [
@@ -212,7 +244,7 @@ export const AITools: React.FC = () => {
         beginAtZero: true,
         max: 100,
         ticks: {
-          callback: function(value: any) {
+          callback: function (value: any) {
             return value + '%';
           }
         }
@@ -265,11 +297,10 @@ export const AITools: React.FC = () => {
             <motion.button
               key={tool.id}
               onClick={() => setActiveTab(tool.id)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                activeTab === tool.id
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all ${activeTab === tool.id
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -290,7 +321,7 @@ export const AITools: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Input
             </h3>
-            
+
             {activeTab === 'analyze' && (
               <form onSubmit={(e) => {
                 e.preventDefault();
@@ -358,11 +389,14 @@ export const AITools: React.FC = () => {
             {activeTab === 'seo' && (
               <div className="space-y-4">
                 <input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
                   type="url"
                   placeholder="Enter website URL to check..."
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
                 <motion.button
+                  onClick={() => handleAnalyzeSEO(url)}
                   className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 transition-all"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -402,7 +436,7 @@ export const AITools: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Results
             </h3>
-            
+
             {isProcessing ? (
               <div className="flex items-center justify-center h-64">
                 <div className="text-center">
