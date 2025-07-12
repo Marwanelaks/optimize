@@ -73,7 +73,7 @@ class FileConversionRequest(BaseModel):
 class AIOptimizer:
     def __init__(self):
         self.client = OpenAI(
-            api_key="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",
+            api_key="",
             base_url="https://openrouter.ai/api/v1/"
         )
     
