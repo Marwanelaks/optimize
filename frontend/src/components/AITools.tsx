@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import {
-  Code,
-  RefreshCw,
-  Search,
-  FileText,
-  Zap,
+import { 
+  Code, 
+  RefreshCw, 
+  Search, 
+  FileText, 
+  Zap, 
   Download,
   Eye,
-  Settings
+  Settings,
+  Copy
 } from 'lucide-react';
 import { Bar, Pie } from 'react-chartjs-2';
 import {
@@ -33,12 +34,25 @@ ChartJS.register(
   ArcElement
 );
 
+interface AnalysisResult {
+  performance_score?: number;
+  seo_score?: number;
+  accessibility_score?: number;
+  suggestions?: string[];
+  optimization_potential?: number;
+  converted?: string;
+  message?: string;
+  error?: string;
+}
+
 export const AITools: React.FC = () => {
   const [activeTab, setActiveTab] = useState('analyze');
   const [code, setCode] = useState('');
   const [url, setUrl] = useState('');
-  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [prompt, setPrompt] = useState('');
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedFileType, setSelectedFileType] = useState('css');
 
   const tools = [
     {
@@ -67,9 +81,29 @@ export const AITools: React.FC = () => {
     }
   ];
 
+  const fileTypes = [
+    { value: 'html', label: 'HTML' },
+    { value: 'css', label: 'CSS' },
+    { value: 'scss', label: 'SCSS' },
+    { value: 'js', label: 'JavaScript' },
+    { value: 'ts', label: 'TypeScript' }
+  ];
+
+  const conversionTypes = [
+    { from: 'css', to: 'scss', label: 'CSS to SCSS' },
+    { from: 'scss', to: 'css', label: 'SCSS to CSS' },
+    { from: 'js', to: 'ts', label: 'JS to TS' },
+    { from: 'html', to: 'jsx', label: 'HTML to JSX' }
+  ];
+
+  const cleanConvertedCode = (code: string) => {
+    // Remove markdown code blocks if present
+    return code.replace(/^```[a-z]*\n/, '').replace(/\n```$/, '');
+  };
+
   const handleAnalyze = async () => {
     if (!code.trim()) return;
-
+    
     setIsProcessing(true);
     try {
       const response = await fetch('http://localhost:8000/ai/analyze', {
@@ -77,71 +111,75 @@ export const AITools: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
+        body: JSON.stringify({ 
           code,
-          file_type: 'html', // or 'css', 'js' etc.
+          file_type: selectedFileType
         }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Something went wrong');
-      }
-
-      const data = await response.json();
-
-      const analysis = data.analysis;
-      setAnalysisResult(analysis);
-
-    } catch (error) {
-      setAnalysisResult({
-        error: error instanceof Error ? error.message : 'Analysis failed',
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleConvert = async (targetFormat: string) => {
-    if (!code.trim()) return;
-
-    setIsProcessing(true);
-    try {
-      const response = await fetch(`http://localhost:8000/ai/convert?target_format=${targetFormat}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        setCode(result.converted);
+        setAnalysisResult(result.analysis || result);
+      } else {
+        const error = await response.json();
+        setAnalysisResult({ error: error.detail || 'Analysis failed' });
       }
     } catch (error) {
-      console.error('Conversion error:', error);
+      setAnalysisResult({ error: error instanceof Error ? error.message : 'Analysis failed' });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleAnalyzeSEO = async (url: string) => {
+  const handleConvert = async (from: string, to: string) => {
+    if (!code.trim()) return;
+    
     setIsProcessing(true);
     try {
-      const response = await fetch(`http://localhost:8000/ai/seo-analyze?url=${encodeURIComponent(url)}`, {
+      const response = await fetch(`http://localhost:8000/ai/convert?target_format=${from}_to_${to}`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          content: code,
+          file_type: from 
+        }),
       });
 
-      if (!response.ok) {
+      if (response.ok) {
+        const result = await response.json();
+        const convertedCode = cleanConvertedCode(result.converted);
+        setCode(convertedCode);
+        setAnalysisResult({
+          converted: convertedCode,
+          message: `Successfully converted from ${from} to ${to}`
+        });
+      } else {
         const error = await response.json();
-        throw new Error(error.detail || 'SEO analysis failed');
+        setAnalysisResult({ error: error.detail || 'Conversion failed' });
       }
+    } catch (error) {
+      setAnalysisResult({ error: error instanceof Error ? error.message : 'Conversion failed' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-      const result = await response.json();
-      console.log('SEO Analysis:', result);
-      setAnalysisResult(result); // Store result in your component state
-
+  const handleSeoCheck = async () => {
+    if (!url.trim()) return;
+    
+    setIsProcessing(true);
+    try {
+      const response = await fetch(`http://localhost:8000/ai/seo-analyze?url=${encodeURIComponent(url)}`);
+      
+      if (response.ok) {
+        const result = await response.json();
+        setAnalysisResult(result.analysis || result);
+      } else {
+        const error = await response.json();
+        setAnalysisResult({ error: error.detail || 'SEO analysis failed' });
+      }
     } catch (error) {
       setAnalysisResult({ error: error instanceof Error ? error.message : 'SEO analysis failed' });
     } finally {
@@ -149,7 +187,9 @@ export const AITools: React.FC = () => {
     }
   };
 
-  const handleSuggest = async (prompt: string) => {
+  const handleSuggest = async () => {
+    if (!prompt.trim()) return;
+    
     setIsProcessing(true);
     try {
       const response = await fetch('http://localhost:8000/ai/suggest', {
@@ -157,25 +197,35 @@ export const AITools: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ 
+          prompt,
+          code: code || undefined 
+        }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        setAnalysisResult(result.response);
+        setAnalysisResult(result);
+      } else {
+        const error = await response.json();
+        setAnalysisResult({ error: error.detail || 'Suggestion failed' });
       }
     } catch (error) {
-      console.error('Suggestion error:', error);
+      setAnalysisResult({ error: error instanceof Error ? error.message : 'Suggestion failed' });
     } finally {
       setIsProcessing(false);
     }
   };
 
   const getChartData = () => {
-    if (!analysisResult) return null;
-
+    if (!analysisResult || analysisResult.error) return null;
+    
     return {
-      labels: ['Performance', 'SEO', 'Accessibility'],
+      labels: ['Performance', 'SEO', 'Accessibility'].filter(
+        (_, i) => analysisResult.performance_score !== undefined ||
+                 analysisResult.seo_score !== undefined ||
+                 analysisResult.accessibility_score !== undefined
+      ),
       datasets: [
         {
           label: 'Scores',
@@ -183,17 +233,25 @@ export const AITools: React.FC = () => {
             analysisResult.performance_score,
             analysisResult.seo_score,
             analysisResult.accessibility_score
-          ],
+          ].filter(score => score !== undefined),
           backgroundColor: [
             'rgba(54, 162, 235, 0.7)',
             'rgba(255, 99, 132, 0.7)',
             'rgba(75, 192, 192, 0.7)'
-          ],
+          ].slice(0, [
+            analysisResult.performance_score,
+            analysisResult.seo_score,
+            analysisResult.accessibility_score
+          ].filter(score => score !== undefined).length),
           borderColor: [
             'rgba(54, 162, 235, 1)',
             'rgba(255, 99, 132, 1)',
             'rgba(75, 192, 192, 1)'
-          ],
+          ].slice(0, [
+            analysisResult.performance_score,
+            analysisResult.seo_score,
+            analysisResult.accessibility_score
+          ].filter(score => score !== undefined).length),
           borderWidth: 1,
         },
       ],
@@ -201,8 +259,8 @@ export const AITools: React.FC = () => {
   };
 
   const getPieData = () => {
-    if (!analysisResult) return null;
-
+    if (!analysisResult || !analysisResult.optimization_potential) return null;
+    
     return {
       labels: ['Optimized', 'Potential'],
       datasets: [
@@ -244,7 +302,7 @@ export const AITools: React.FC = () => {
         beginAtZero: true,
         max: 100,
         ticks: {
-          callback: function (value: any) {
+          callback: function(value: any) {
             return value + '%';
           }
         }
@@ -268,6 +326,11 @@ export const AITools: React.FC = () => {
     },
   };
 
+  // Reset analysis when changing tabs
+  useEffect(() => {
+    setAnalysisResult(null);
+  }, [activeTab]);
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -279,7 +342,7 @@ export const AITools: React.FC = () => {
           className="mb-8"
         >
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            AI Tools
+            AI Optimization Tools
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
             Advanced AI-powered tools for code optimization and analysis
@@ -297,10 +360,11 @@ export const AITools: React.FC = () => {
             <motion.button
               key={tool.id}
               onClick={() => setActiveTab(tool.id)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all ${activeTab === tool.id
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                activeTab === tool.id
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -321,12 +385,21 @@ export const AITools: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Input
             </h3>
-
+            
             {activeTab === 'analyze' && (
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                handleAnalyze();
-              }} className="space-y-4">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <label className="text-sm text-gray-600 dark:text-gray-300">File Type:</label>
+                  <select
+                    value={selectedFileType}
+                    onChange={(e) => setSelectedFileType(e.target.value)}
+                    className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm"
+                  >
+                    {fileTypes.map((type) => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <textarea
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
@@ -334,7 +407,7 @@ export const AITools: React.FC = () => {
                   className="w-full h-64 p-4 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
                 />
                 <motion.button
-                  type="submit"
+                  onClick={handleAnalyze}
                   disabled={!code.trim() || isProcessing}
                   className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   whileHover={{ scale: 1.02 }}
@@ -352,11 +425,23 @@ export const AITools: React.FC = () => {
                     </>
                   )}
                 </motion.button>
-              </form>
+              </div>
             )}
 
             {activeTab === 'convert' && (
               <div className="space-y-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <label className="text-sm text-gray-600 dark:text-gray-300">Source Type:</label>
+                  <select
+                    value={selectedFileType}
+                    onChange={(e) => setSelectedFileType(e.target.value)}
+                    className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm"
+                  >
+                    {fileTypes.map((type) => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <textarea
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
@@ -364,24 +449,18 @@ export const AITools: React.FC = () => {
                   className="w-full h-48 p-4 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
                 />
                 <div className="grid grid-cols-2 gap-3">
-                  <motion.button
-                    onClick={() => handleConvert('css_to_scss')}
-                    disabled={!code.trim() || isProcessing}
-                    className="bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    CSS to SCSS
-                  </motion.button>
-                  <motion.button
-                    onClick={() => handleConvert('js_to_ts')}
-                    disabled={!code.trim() || isProcessing}
-                    className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    JS to TS
-                  </motion.button>
+                  {conversionTypes.map((conv) => (
+                    <motion.button
+                      key={`${conv.from}_${conv.to}`}
+                      onClick={() => handleConvert(conv.from, conv.to)}
+                      disabled={!code.trim() || isProcessing}
+                      className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      {conv.label}
+                    </motion.button>
+                  ))}
                 </div>
               </div>
             )}
@@ -389,15 +468,16 @@ export const AITools: React.FC = () => {
             {activeTab === 'seo' && (
               <div className="space-y-4">
                 <input
+                  type="url"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  type="url"
                   placeholder="Enter website URL to check..."
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
                 <motion.button
-                  onClick={() => handleAnalyzeSEO(url)}
-                  className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 transition-all"
+                  onClick={handleSeoCheck}
+                  disabled={!url.trim() || isProcessing}
+                  className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -410,12 +490,15 @@ export const AITools: React.FC = () => {
             {activeTab === 'suggestions' && (
               <div className="space-y-4">
                 <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
                   placeholder="Describe what you want to optimize..."
                   className="w-full h-32 p-4 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
                 <motion.button
-                  onClick={() => handleSuggest('Optimize my website performance')}
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-3 px-4 rounded-lg font-medium hover:from-purple-600 hover:to-pink-700 transition-all"
+                  onClick={handleSuggest}
+                  disabled={!prompt.trim() || isProcessing}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-3 px-4 rounded-lg font-medium hover:from-purple-600 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -436,7 +519,7 @@ export const AITools: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Results
             </h3>
-
+            
             {isProcessing ? (
               <div className="flex items-center justify-center h-64">
                 <div className="text-center">
@@ -446,76 +529,113 @@ export const AITools: React.FC = () => {
               </div>
             ) : analysisResult ? (
               <div className="space-y-6">
-                {activeTab === 'analyze' && !analysisResult.error ? (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="h-64">
-                        <Bar data={getChartData()} options={chartOptions} />
-                      </div>
-                      <div className="h-64">
-                        <Pie data={getPieData()} options={pieOptions} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                        <h4 className="font-medium text-blue-800 dark:text-blue-200">Performance</h4>
-                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">
-                          {analysisResult.performance_score}%
-                        </p>
-                      </div>
-                      <div className="bg-pink-50 dark:bg-pink-900/20 p-4 rounded-lg">
-                        <h4 className="font-medium text-pink-800 dark:text-pink-200">SEO</h4>
-                        <p className="text-2xl font-bold text-pink-600 dark:text-pink-300">
-                          {analysisResult.seo_score}%
-                        </p>
-                      </div>
-                      <div className="bg-teal-50 dark:bg-teal-900/20 p-4 rounded-lg">
-                        <h4 className="font-medium text-teal-800 dark:text-teal-200">Accessibility</h4>
-                        <p className="text-2xl font-bold text-teal-600 dark:text-teal-300">
-                          {analysisResult.accessibility_score}%
-                        </p>
-                      </div>
-                      <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
-                        <h4 className="font-medium text-purple-800 dark:text-purple-200">Optimization Potential</h4>
-                        <p className="text-2xl font-bold text-purple-600 dark:text-purple-300">
-                          {analysisResult.optimization_potential}%
-                        </p>
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Optimization Suggestions</h4>
-                      <ul className="list-disc pl-5 space-y-2 text-gray-800 dark:text-gray-200">
-                        {analysisResult.suggestions.map((suggestion: string, index: number) => (
-                          <li key={index}>{suggestion}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </>
+                {analysisResult.error ? (
+                  <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg text-red-600 dark:text-red-300">
+                    <p className="font-medium">Error:</p>
+                    <p>{analysisResult.error}</p>
+                  </div>
                 ) : (
                   <>
-                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                      <pre className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
-                        {typeof analysisResult === 'string' ? analysisResult : JSON.stringify(analysisResult, null, 2)}
-                      </pre>
-                    </div>
-                    {activeTab !== 'analyze' && (
-                      <div className="flex space-x-2">
-                        <motion.button
-                          className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-all"
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <Download className="w-4 h-4 inline mr-2" />
-                          Download
-                        </motion.button>
-                        <motion.button
-                          className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-all"
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <Eye className="w-4 h-4 inline mr-2" />
-                          Preview
-                        </motion.button>
+                    {(analysisResult.performance_score !== undefined ||
+                      analysisResult.seo_score !== undefined ||
+                      analysisResult.accessibility_score !== undefined) && (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {getChartData() && (
+                            <div className="h-64">
+                              <Bar data={getChartData()} options={chartOptions} />
+                            </div>
+                          )}
+                          {getPieData() && (
+                            <div className="h-64">
+                              <Pie data={getPieData()} options={pieOptions} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          {analysisResult.performance_score !== undefined && (
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                              <h4 className="font-medium text-blue-800 dark:text-blue-200">Performance</h4>
+                              <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">
+                                {analysisResult.performance_score}%
+                              </p>
+                            </div>
+                          )}
+                          {analysisResult.seo_score !== undefined && (
+                            <div className="bg-pink-50 dark:bg-pink-900/20 p-4 rounded-lg">
+                              <h4 className="font-medium text-pink-800 dark:text-pink-200">SEO</h4>
+                              <p className="text-2xl font-bold text-pink-600 dark:text-pink-300">
+                                {analysisResult.seo_score}%
+                              </p>
+                            </div>
+                          )}
+                          {analysisResult.accessibility_score !== undefined && (
+                            <div className="bg-teal-50 dark:bg-teal-900/20 p-4 rounded-lg">
+                              <h4 className="font-medium text-teal-800 dark:text-teal-200">Accessibility</h4>
+                              <p className="text-2xl font-bold text-teal-600 dark:text-teal-300">
+                                {analysisResult.accessibility_score}%
+                              </p>
+                            </div>
+                          )}
+                          {analysisResult.optimization_potential !== undefined && (
+                            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                              <h4 className="font-medium text-purple-800 dark:text-purple-200">Optimization Potential</h4>
+                              <p className="text-2xl font-bold text-purple-600 dark:text-purple-300">
+                                {analysisResult.optimization_potential}%
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        {analysisResult.suggestions && (
+                          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Optimization Suggestions</h4>
+                            <ul className="list-disc pl-5 space-y-2 text-gray-800 dark:text-gray-200">
+                              {analysisResult.suggestions.map((suggestion: string, index: number) => (
+                                <li key={index}>{suggestion}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {analysisResult.converted && (
+                      <div className="space-y-4">
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                          <h4 className="font-medium text-gray-900 dark:text-white mb-2">
+                            {analysisResult.message || 'Converted Code'}
+                          </h4>
+                          <pre className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap font-mono">
+                            {analysisResult.converted}
+                          </pre>
+                        </div>
+                        <div className="flex space-x-2">
+                          <motion.button
+                            onClick={() => navigator.clipboard.writeText(analysisResult.converted || '')}
+                            className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-all"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <Copy className="w-4 h-4 inline mr-2" />
+                            Copy Code
+                          </motion.button>
+                          <motion.button
+                            onClick={() => {
+                              const blob = new Blob([analysisResult.converted || ''], { type: 'text/plain' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `converted.${analysisResult.message?.split('to ')[1] || 'txt'}`;
+                              a.click();
+                            }}
+                            className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-all"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <Download className="w-4 h-4 inline mr-2" />
+                            Download
+                          </motion.button>
+                        </div>
                       </div>
                     )}
                   </>
@@ -568,7 +688,7 @@ export const AITools: React.FC = () => {
               whileHover={{ scale: 1.02 }}
             >
               <div className={`p-3 bg-${tool.color}-100 dark:bg-${tool.color}-900/30 rounded-lg w-fit mb-4`}>
-                <tool.icon className={`w-6 h-6 text-${tool.color}-600`} />
+                <tool.icon className={`w-6 h-6 text-${tool.color}-600 dark:text-${tool.color}-300`} />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 {tool.title}
