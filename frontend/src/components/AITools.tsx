@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Code, 
-  RefreshCw, 
-  Search, 
-  FileText, 
-  Zap, 
+import {
+  Code,
+  RefreshCw,
+  Search,
+  FileText,
+  Zap,
   Download,
   Eye,
   Settings,
@@ -103,7 +103,7 @@ export const AITools: React.FC = () => {
 
   const handleAnalyze = async () => {
     if (!code.trim()) return;
-    
+
     setIsProcessing(true);
     try {
       const response = await fetch('http://localhost:8000/ai/analyze', {
@@ -111,7 +111,7 @@ export const AITools: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           code,
           file_type: selectedFileType
         }),
@@ -133,7 +133,7 @@ export const AITools: React.FC = () => {
 
   const handleConvert = async (from: string, to: string) => {
     if (!code.trim()) return;
-    
+
     setIsProcessing(true);
     try {
       const response = await fetch(`http://localhost:8000/ai/convert?target_format=${from}_to_${to}`, {
@@ -141,9 +141,9 @@ export const AITools: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           content: code,
-          file_type: from 
+          file_type: from
         }),
       });
 
@@ -168,11 +168,16 @@ export const AITools: React.FC = () => {
 
   const handleSeoCheck = async () => {
     if (!url.trim()) return;
-    
     setIsProcessing(true);
+
     try {
-      const response = await fetch(`http://localhost:8000/ai/seo-analyze?url=${encodeURIComponent(url)}`);
-      
+      const response = await fetch(`http://localhost:8000/ai/seo-analyze?url=${encodeURIComponent(url)}`, {
+        method: 'POST', // or whatever method your backend expects
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
       if (response.ok) {
         const result = await response.json();
         setAnalysisResult(result.analysis || result);
@@ -189,7 +194,7 @@ export const AITools: React.FC = () => {
 
   const handleSuggest = async () => {
     if (!prompt.trim()) return;
-    
+
     setIsProcessing(true);
     try {
       const response = await fetch('http://localhost:8000/ai/suggest', {
@@ -197,9 +202,9 @@ export const AITools: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           prompt,
-          code: code || undefined 
+          code: code || undefined
         }),
       });
 
@@ -219,12 +224,12 @@ export const AITools: React.FC = () => {
 
   const getChartData = () => {
     if (!analysisResult || analysisResult.error) return null;
-    
+
     return {
       labels: ['Performance', 'SEO', 'Accessibility'].filter(
         (_, i) => analysisResult.performance_score !== undefined ||
-                 analysisResult.seo_score !== undefined ||
-                 analysisResult.accessibility_score !== undefined
+          analysisResult.seo_score !== undefined ||
+          analysisResult.accessibility_score !== undefined
       ),
       datasets: [
         {
@@ -260,7 +265,7 @@ export const AITools: React.FC = () => {
 
   const getPieData = () => {
     if (!analysisResult || !analysisResult.optimization_potential) return null;
-    
+
     return {
       labels: ['Optimized', 'Potential'],
       datasets: [
@@ -302,7 +307,7 @@ export const AITools: React.FC = () => {
         beginAtZero: true,
         max: 100,
         ticks: {
-          callback: function(value: any) {
+          callback: function (value: any) {
             return value + '%';
           }
         }
@@ -360,11 +365,10 @@ export const AITools: React.FC = () => {
             <motion.button
               key={tool.id}
               onClick={() => setActiveTab(tool.id)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                activeTab === tool.id
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all ${activeTab === tool.id
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+                }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -385,7 +389,7 @@ export const AITools: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Input
             </h3>
-            
+
             {activeTab === 'analyze' && (
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 mb-2">
@@ -519,7 +523,7 @@ export const AITools: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Results
             </h3>
-            
+
             {isProcessing ? (
               <div className="flex items-center justify-center h-64">
                 <div className="text-center">
@@ -539,65 +543,65 @@ export const AITools: React.FC = () => {
                     {(analysisResult.performance_score !== undefined ||
                       analysisResult.seo_score !== undefined ||
                       analysisResult.accessibility_score !== undefined) && (
-                      <>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {getChartData() && (
-                            <div className="h-64">
-                              <Bar data={getChartData()} options={chartOptions} />
-                            </div>
-                          )}
-                          {getPieData() && (
-                            <div className="h-64">
-                              <Pie data={getPieData()} options={pieOptions} />
-                            </div>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                          {analysisResult.performance_score !== undefined && (
-                            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                              <h4 className="font-medium text-blue-800 dark:text-blue-200">Performance</h4>
-                              <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">
-                                {analysisResult.performance_score}%
-                              </p>
-                            </div>
-                          )}
-                          {analysisResult.seo_score !== undefined && (
-                            <div className="bg-pink-50 dark:bg-pink-900/20 p-4 rounded-lg">
-                              <h4 className="font-medium text-pink-800 dark:text-pink-200">SEO</h4>
-                              <p className="text-2xl font-bold text-pink-600 dark:text-pink-300">
-                                {analysisResult.seo_score}%
-                              </p>
-                            </div>
-                          )}
-                          {analysisResult.accessibility_score !== undefined && (
-                            <div className="bg-teal-50 dark:bg-teal-900/20 p-4 rounded-lg">
-                              <h4 className="font-medium text-teal-800 dark:text-teal-200">Accessibility</h4>
-                              <p className="text-2xl font-bold text-teal-600 dark:text-teal-300">
-                                {analysisResult.accessibility_score}%
-                              </p>
-                            </div>
-                          )}
-                          {analysisResult.optimization_potential !== undefined && (
-                            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
-                              <h4 className="font-medium text-purple-800 dark:text-purple-200">Optimization Potential</h4>
-                              <p className="text-2xl font-bold text-purple-600 dark:text-purple-300">
-                                {analysisResult.optimization_potential}%
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        {analysisResult.suggestions && (
-                          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Optimization Suggestions</h4>
-                            <ul className="list-disc pl-5 space-y-2 text-gray-800 dark:text-gray-200">
-                              {analysisResult.suggestions.map((suggestion: string, index: number) => (
-                                <li key={index}>{suggestion}</li>
-                              ))}
-                            </ul>
+                        <>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {getChartData() && (
+                              <div className="h-64">
+                                <Bar data={getChartData()} options={chartOptions} />
+                              </div>
+                            )}
+                            {getPieData() && (
+                              <div className="h-64">
+                                <Pie data={getPieData()} options={pieOptions} />
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </>
-                    )}
+                          <div className="grid grid-cols-2 gap-4 mb-4">
+                            {analysisResult.performance_score !== undefined && (
+                              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                                <h4 className="font-medium text-blue-800 dark:text-blue-200">Performance</h4>
+                                <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">
+                                  {analysisResult.performance_score}%
+                                </p>
+                              </div>
+                            )}
+                            {analysisResult.seo_score !== undefined && (
+                              <div className="bg-pink-50 dark:bg-pink-900/20 p-4 rounded-lg">
+                                <h4 className="font-medium text-pink-800 dark:text-pink-200">SEO</h4>
+                                <p className="text-2xl font-bold text-pink-600 dark:text-pink-300">
+                                  {analysisResult.seo_score}%
+                                </p>
+                              </div>
+                            )}
+                            {analysisResult.accessibility_score !== undefined && (
+                              <div className="bg-teal-50 dark:bg-teal-900/20 p-4 rounded-lg">
+                                <h4 className="font-medium text-teal-800 dark:text-teal-200">Accessibility</h4>
+                                <p className="text-2xl font-bold text-teal-600 dark:text-teal-300">
+                                  {analysisResult.accessibility_score}%
+                                </p>
+                              </div>
+                            )}
+                            {analysisResult.optimization_potential !== undefined && (
+                              <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                                <h4 className="font-medium text-purple-800 dark:text-purple-200">Optimization Potential</h4>
+                                <p className="text-2xl font-bold text-purple-600 dark:text-purple-300">
+                                  {analysisResult.optimization_potential}%
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          {analysisResult.suggestions && (
+                            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                              <h4 className="font-medium text-gray-900 dark:text-white mb-2">Optimization Suggestions</h4>
+                              <ul className="list-disc pl-5 space-y-2 text-gray-800 dark:text-gray-200">
+                                {analysisResult.suggestions.map((suggestion: string, index: number) => (
+                                  <li key={index}>{suggestion}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </>
+                      )}
 
                     {analysisResult.converted && (
                       <div className="space-y-4">

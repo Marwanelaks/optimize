@@ -654,7 +654,6 @@ async def ai_convert(
     except Exception as e:
         logger.error(f"Conversion failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-    
 
 @app.post("/ai/suggest", response_model=Dict[str, str])
 async def ai_suggest(request: AIAnalysisRequest):
